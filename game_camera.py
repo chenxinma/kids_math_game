@@ -6,7 +6,8 @@ import random
 import threading
 import pygame
 from pygame.locals import \
-    K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9
+    K_0, K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9, \
+    K_KP0, K_KP1, K_KP2, K_KP3, K_KP4, K_KP5, K_KP6, K_KP7, K_KP8, K_KP9
 from pygame.color import THECOLORS
 
 import pymunk
@@ -125,7 +126,7 @@ class Camera(threading.Thread):
             ds = list(zip(positions, predictions))
             ds.sort(key=lambda x: x[0][0] * x[0][1])
 
-            self.catched = [str(n) for n in map(lambda d: d[1], ds[:2])]
+            self.catched = [str(n) for n in map(lambda d: d[1], ds)]
 
 
 def flipy(y):
@@ -208,9 +209,10 @@ class FormulaLabel(GLabel):
         self.flush_text()
 
     def set_numbers(self, numbers):
-        self.input_stack.clear()
-        self.input_stack.extend(numbers)
-        self.flush_text()
+        if len(numbers) >= 2:
+            self.input_stack.clear()
+            self.input_stack.extend(numbers[:2])
+            self.flush_text()
 
     def valify(self):
         if self.MAX_STACK == len(self.input_stack):
@@ -235,8 +237,104 @@ class FormulaLabel(GLabel):
         self.handle_input(keys)
 
     def handle_input(self, keys):
-        if keys in [K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9]:
-            self.put(str(keys - K_1 + 1))
+        if keys in [K_0, K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9]:
+            self.put(str(keys - K_0))
+
+        if keys in [
+                K_KP0, K_KP1, K_KP2, K_KP3, K_KP4, K_KP5, K_KP6, K_KP7, K_KP8,
+                K_KP9
+        ]:
+            self.put(str(keys - K_KP0))
+
+    def get_quest(self):
+        return "□ %s □ = %d" % (self.operate, self.result)
+
+
+class FormulaLabel_V2(GLabel):
+    def __init__(self,
+                 font,
+                 text='[Blank]',
+                 color=THECOLORS['black'],
+                 position=[640, 250],
+                 g_holder=None):
+        super().__init__(font, text=text, color=color, position=position)
+        self.MAX_STACK = 2
+        self.input_stack = []
+        self.operate = ""
+        self.seed = None
+        self.g_holder = g_holder
+        self.quest = ""
+        self.v = 0
+        self.vo = 0
+
+    def set_answer(self, seed):
+        self.seed = seed
+        self.input_stack.clear()
+        self.flush_operate()
+        if "+" == self.operate:
+            self.v = random.randint(1, 20 - seed)
+        elif "-" == self.operate:
+            if seed == 1:
+                self.v = 0
+            else:
+                self.v = random.randint(1, seed - 1)
+        self.vo = eval("%s%s%d" % (self.seed, self.operate, self.v))
+        self.quest = "%s %s %d = □" % (self.seed, self.operate, self.v)
+        self.flush_text()
+
+    def flush_operate(self):
+        self.operate = random.choice(["+", "-"])
+
+    def flush_text(self):
+        t = self.text
+        if len(self.input_stack) > 0:
+            t = "%s %s %d = %s" % (self.seed, self.operate, self.v, "".join(
+                self.input_stack))
+        self.set_text(t)
+
+    def put(self, num):
+        if self.MAX_STACK > len(self.input_stack):
+            self.input_stack.append(num)
+        self.flush_text()
+
+    def set_numbers(self, numbers):
+        if len(numbers) >= 1:
+            self.input_stack.clear()
+            self.input_stack.extend(numbers[:self.MAX_STACK])
+            self.flush_text()
+
+    def valify(self):
+        if len(self.input_stack) > 0:
+            f = "".join(self.input_stack)
+            vi = int(f)
+            if self.MAX_STACK == len(self.input_stack):
+                self.input_stack.clear()
+            is_correct = vi == self.vo
+            if is_correct:
+                self.color = THECOLORS['green']
+            else:
+                self.color = THECOLORS['red']
+            self.flush_text()
+            return is_correct
+        else:
+            self.color = THECOLORS['gray']
+        return False
+
+    def update(self, keys):
+        self.handle_input(keys)
+
+    def handle_input(self, keys):
+        if keys in [K_0, K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9]:
+            self.put(str(keys - K_0))
+
+        if keys in [
+                K_KP0, K_KP1, K_KP2, K_KP3, K_KP4, K_KP5, K_KP6, K_KP7, K_KP8,
+                K_KP9
+        ]:
+            self.put(str(keys - K_KP0))
+
+    def get_quest(self):
+        return self.quest
 
 
 class NumBall(pygame.sprite.Sprite):
@@ -347,8 +445,7 @@ class NumBallGroup(pygame.sprite.Group):
             if self.active_ball:
                 self.g_holder.formula.set_answer(self.active_ball.num)
                 self.g_holder.quest_label.set_text(
-                    "? %s ? = %d" %
-                    (self.g_holder.formula.operate, self.active_ball.num))
+                    self.g_holder.formula.get_quest())
 
     def remove_active_ball(self):
         self.balls_to_remove.append(self.active_ball)
@@ -362,8 +459,8 @@ class Game(object):
 
         self.screen = self.setup_pygame()
         self.screen_rect = self.screen.get_rect()
-        self.label_group = pygame.sprite.Group()
         self.ball_group = NumBallGroup(self)
+        self.label_group = pygame.sprite.Group()
         self.clock = pygame.time.Clock()
         self.fps = 60
         self.done = False
@@ -390,13 +487,8 @@ class Game(object):
                                   color=THECOLORS['red'],
                                   position=[1258, 64],
                                   align='right')
-        self.log_label = GLabel(font=self.fonts['SCORE_FONT'],
-                                text='',
-                                color=THECOLORS['black'],
-                                position=[18, 32],
-                                align='left')
+
         self.label_group.add(self.score_label)
-        self.label_group.add(self.log_label)
         self.label_group.add(self.quest_label)
 
         if WITH_CAMERA:
@@ -447,11 +539,16 @@ class Game(object):
 
     def create_formula(self, label_group):
         """Creates a formula to control"""
-        f = FormulaLabel(self.fonts['FORMUL_FONT'],
-                         text="",
-                         color=THECOLORS['gray'],
-                         position=[640, 200],
-                         g_holder=self)
+        # f = FormulaLabel(self.fonts['FORMUL_FONT'],
+        #                  text="",
+        #                  color=THECOLORS['gray'],
+        #                  position=[640, 200],
+        #                  g_holder=self)
+        f = FormulaLabel_V2(self.fonts['FORMUL_FONT'],
+                            text="",
+                            color=THECOLORS['gray'],
+                            position=[640, 200],
+                            g_holder=self)
         label_group.add(f)
 
         return f
@@ -475,13 +572,11 @@ class Game(object):
             # update
             self.label_group.update(self.keys)
             self.ball_group.update()
-            # self.log_label.set_text(str(pygame.time.get_ticks()))
 
             # fetch numbers form camera
             if WITH_CAMERA and \
                     pygame.time.get_ticks() - self.present_time > 1000.0:
-                if len(self.camera.catched) == 2:
-                    self.formula.set_numbers(self.camera.catched)
+                self.formula.set_numbers(self.camera.catched)
                 self.present_time = pygame.time.get_ticks()
 
             # Update physics
