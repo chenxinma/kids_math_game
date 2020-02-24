@@ -21,3 +21,5 @@ digits_detect_camera.ipynb | Opencv 从摄像头的图像里识别数字区域�
 spawns.py | pymunk的样例，数字求运动
 camera.py | 摄像头数字识别
 game_camera.py | 游戏程序
+
+![image](https://github.com/chenxinma/kids_math_game/raw/master/doc/screen_01.png)
